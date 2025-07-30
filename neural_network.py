@@ -10,7 +10,10 @@ from utils import (
     load_valid_csv,
     load_public_test_csv,
     load_train_sparse,
+    load_train_csv
 )
+
+import matplotlib.pyplot as plt
 
 
 def load_data(base_path="./data"):
@@ -93,9 +96,12 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
     :param zero_train_data: 2D FloatTensor
     :param valid_data: Dict
     :param num_epoch: int
-    :return: None
+    :return: None NOTE: change to returning the losses
     """
     # TODO: Add a regularizer to the cost function.
+
+    # ADDED LOSS TRACKING
+    train_losses = []
 
     # Tell PyTorch you are training the model.
     model.train()
@@ -124,13 +130,16 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
 
             train_loss += loss.item()
             optimizer.step()
+        
+        train_losses.append(train_loss)
 
         valid_acc = evaluate(model, zero_train_data, valid_data)
-        print(
-            "Epoch: {} \tTraining Cost: {:.6f}\t " "Valid Acc: {}".format(
-                epoch, train_loss, valid_acc
-            )
-        )
+        #print(
+            #"Epoch: {} \tTraining Cost: {:.6f}\t " "Valid Acc: {}".format(
+            #    epoch, train_loss, valid_acc
+            #)
+        #)
+        return train_losses  # Return the losses for plotting
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
@@ -172,16 +181,22 @@ def main():
     #####################################################################
     # Set model hyperparameters.
     #k = None
-    ks = [10, 50, 100, 200, 500] # assigned k values
-    best_k = None
+    ks = [10] #, 50, 100, 200, 500] # assigned k values
+    best_k = 10
     best_val_acc = 0
 
-    val_accs = []
+    # per k
+    #val_accs_k = []
     #model = None
+
+    # per epoch
+    train_losses = []
+    train_accs = []
+    val_accs = []
 
     # Set optimization hyperparameters.
     lr = 0.03
-    num_epoch = 20
+    num_epoch = 30
     lamb = 0.0001
 
     #train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch)
@@ -189,27 +204,56 @@ def main():
     for k in ks:
         print("current k:", k)
         model = AutoEncoder(num_question=zero_train_matrix.shape[1], k=k)
-        train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch)
+        for epoch in range(num_epoch):
+            train_losses.extend(train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, 1))
+            print("epoch:", epoch)
+
+            train_acc = evaluate(model, zero_train_matrix, load_train_csv("./data"))
+            train_accs.append(train_acc)
+            print("train accuracy:", train_acc)
+
+            val_acc = evaluate(model, zero_train_matrix, valid_data)
+            val_accs.append(val_acc)
+            print("val accuracy:", val_acc)
 
     # Next, evaluate your network on validation/test data
-        val_acc = evaluate(model, zero_train_matrix, valid_data)
-        val_accs.append(val_acc)
-        print("accuracy for k =", k, ":", val_acc)
+    #    val_acc = evaluate(model, zero_train_matrix, valid_data)
+    #    val_accs.append(val_acc)
+    #    print("accuracy for k =", k, ":", val_acc)
 
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            best_k = k
+    #    if val_acc > best_val_acc:
+    #        best_val_acc = val_acc
+    #        best_k = k
 
-    print("best k:", best_k, "val acc:", best_val_acc)
+    #print("best k:", best_k, "val acc:", best_val_acc)
 
-    best_model = AutoEncoder(num_question=zero_train_matrix.shape[1], k=best_k)
-    train(best_model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch)
+    best_model = model#AutoEncoder(num_question=zero_train_matrix.shape[1], k=best_k)
+    #train(best_model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch)
 
-    print("val accs:", val_accs)
+    #print("val accs:", val_accs)
 
     # test accuracy
     test_acc = evaluate(best_model, zero_train_matrix, test_data)
     print("test accuracy:", test_acc)
+
+    # plot
+    fig, (acc_plot, loss_plot) = plt.subplots(1, 2, figsize=(10, 4))
+    acc_plot.plot(range(num_epoch), train_accs, label='Training Accuracy')
+    acc_plot.plot(range(num_epoch), val_accs, label='Validation Accuracy')
+    acc_plot.axhline(y=test_acc, color='r', linestyle='-', label='Final Test Accuracy')
+    acc_plot.set_xlabel('Epoch')
+    acc_plot.set_ylabel('Accuracy')
+    acc_plot.set_title('Training and Validation Accuracy over Epochs')
+    acc_plot.legend()
+
+    loss_plot.plot(range(num_epoch), train_losses, label='Training Loss')
+    loss_plot.set_xlabel('Epoch')
+    loss_plot.set_ylabel('Loss')
+    loss_plot.set_title('Training Loss over Epochs')
+    loss_plot.legend()
+
+    plt.tight_layout()
+    plt.savefig("training_results.png")
 
     #####################################################################
     #                       END OF YOUR CODE                            #
