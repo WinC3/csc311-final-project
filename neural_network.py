@@ -125,7 +125,7 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
             target[nan_mask] = output[nan_mask]
 
             loss = torch.sum((output - target) ** 2.0)
-            loss += lamb * model.get_weight_norm()  # THE TODO PART reg term
+            loss += (lamb/2) * model.get_weight_norm()  # THE TODO PART reg term
             loss.backward()
 
             train_loss += loss.item()
@@ -134,12 +134,12 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
         train_losses.append(train_loss)
 
         valid_acc = evaluate(model, zero_train_data, valid_data)
-        #print(
-            #"Epoch: {} \tTraining Cost: {:.6f}\t " "Valid Acc: {}".format(
-            #    epoch, train_loss, valid_acc
-            #)
-        #)
-        return train_losses  # Return the losses for plotting
+        print(
+            "Epoch: {} \tTraining Cost: {:.6f}\t " "Valid Acc: {}".format(
+                epoch, train_loss, valid_acc
+            )
+        )
+    return train_losses  # Return the losses for plotting
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
@@ -181,7 +181,7 @@ def main():
     #####################################################################
     # Set model hyperparameters.
     #k = None
-    ks = [10] #, 50, 100, 200, 500] # assigned k values
+    ks = [10]#, 50, 100, 200, 500] # assigned k values
     best_k = 10
     best_val_acc = 0
 
@@ -190,18 +190,42 @@ def main():
     #model = None
 
     # per epoch
+    #train_losses = []
+    #train_accs = []
+    #val_accs = []
+
+    # per lambda
+    lambs = [0.0001, 0.001, 0.01, 0.1, 1.0]  # assigned lambdas
     train_losses = []
     train_accs = []
     val_accs = []
+    test_accs = []
 
     # Set optimization hyperparameters.
     lr = 0.03
-    num_epoch = 30
-    lamb = 0.0001
+    num_epoch = 80
+    #lamb = 0.001
 
     #train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch)
 
-    for k in ks:
+    for lamb in lambs:
+        print("current lambda:", lamb)
+        model = AutoEncoder(num_question=zero_train_matrix.shape[1], k=best_k)
+        train_losses.append(train(model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch)[-1])
+
+        train_acc = evaluate(model, zero_train_matrix, load_train_csv("./data"))
+        train_accs.append(train_acc)
+        print("train accuracy:", train_acc)
+
+        val_acc = evaluate(model, zero_train_matrix, valid_data)
+        val_accs.append(val_acc)
+        print("val accuracy:", val_acc)
+
+        test_acc = evaluate(model, zero_train_matrix, test_data)
+        test_accs.append(test_acc)
+        print("test accuracy:", test_acc)
+
+    '''for k in ks:
         print("current k:", k)
         model = AutoEncoder(num_question=zero_train_matrix.shape[1], k=k)
         for epoch in range(num_epoch):
@@ -214,30 +238,32 @@ def main():
 
             val_acc = evaluate(model, zero_train_matrix, valid_data)
             val_accs.append(val_acc)
-            print("val accuracy:", val_acc)
+            print("val accuracy:", val_acc)''' # this was for part d
 
     # Next, evaluate your network on validation/test data
-    #    val_acc = evaluate(model, zero_train_matrix, valid_data)
-    #    val_accs.append(val_acc)
-    #    print("accuracy for k =", k, ":", val_acc)
+    '''val_acc = evaluate(model, zero_train_matrix, valid_data)
+        val_accs_k.append(val_acc)
+        print("accuracy for k =", k, ":", val_acc)
 
-    #    if val_acc > best_val_acc:
-    #        best_val_acc = val_acc
-    #        best_k = k
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            best_k = k''' # this was for pard c
 
     #print("best k:", best_k, "val acc:", best_val_acc)
 
     best_model = model#AutoEncoder(num_question=zero_train_matrix.shape[1], k=best_k)
     #train(best_model, lr, lamb, train_matrix, zero_train_matrix, valid_data, num_epoch)
 
-    #print("val accs:", val_accs)
+    #print("val accs:", val_accs_k)
 
     # test accuracy
     test_acc = evaluate(best_model, zero_train_matrix, test_data)
     print("test accuracy:", test_acc)
 
-    # plot
-    fig, (acc_plot, loss_plot) = plt.subplots(1, 2, figsize=(10, 4))
+    print("final train loss:", train_losses)
+
+    # plot part d
+    '''fig, (acc_plot, loss_plot) = plt.subplots(1, 2, figsize=(10, 4))
     acc_plot.plot(range(num_epoch), train_accs, label='Training Accuracy')
     acc_plot.plot(range(num_epoch), val_accs, label='Validation Accuracy')
     acc_plot.axhline(y=test_acc, color='r', linestyle='-', label='Final Test Accuracy')
@@ -253,7 +279,30 @@ def main():
     loss_plot.legend()
 
     plt.tight_layout()
-    plt.savefig("training_results.png")
+    plt.savefig("q3_nn_training_results.png")
+    plt.show()'''
+
+    # plot part e
+    fig, (acc_plot, loss_plot) = plt.subplots(1, 2, figsize=(10, 4))
+    acc_plot.plot(lambs, train_accs, label='Training Accuracy', marker='o')
+    acc_plot.plot(lambs, val_accs, label='Validation Accuracy', marker='o')
+    acc_plot.plot(lambs, test_accs, label='Test Accuracy', marker='o')
+    acc_plot.set_xlabel('Lambda')
+    acc_plot.set_ylabel('Accuracy')
+    acc_plot.set_title('Final Training, Validation, and Test Accuracy vs Lambda')
+    acc_plot.legend()
+    acc_plot.set_xscale('log')
+
+    loss_plot.plot(lambs, train_losses, label='Training Loss', marker='o')
+    loss_plot.set_xlabel('Lambda')
+    loss_plot.set_ylabel('Loss')
+    loss_plot.set_title('Final Training Loss vs Lambda')
+    loss_plot.legend()
+    loss_plot.set_xscale('log')
+    
+    plt.tight_layout()
+    plt.savefig("q3_nn_lambda_results_2.png")
+    plt.show()
 
     #####################################################################
     #                       END OF YOUR CODE                            #
