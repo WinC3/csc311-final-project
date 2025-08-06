@@ -28,6 +28,19 @@ def _load_csv(path):
     return data
 
 
+def load_question_meta(path="./data/question_meta.csv"):
+    import csv
+    question_meta = {}
+    with open(path, "r") as f:
+        reader = csv.reader(f)
+        next(reader)
+        for row in reader:
+            qid = int(row[0])
+            subject_ids = eval(row[1])
+            question_meta[qid] = subject_ids
+    return question_meta
+
+
 def load_train_sparse(root_dir="./data"):
     """Load the training data as a spare matrix representation.
 
