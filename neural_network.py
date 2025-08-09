@@ -134,11 +134,11 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, num_epoch):
         train_losses.append(train_loss)
 
         valid_acc = evaluate(model, zero_train_data, valid_data)
-        print(
-            "Epoch: {} \tTraining Cost: {:.6f}\t " "Valid Acc: {}".format(
-                epoch, train_loss, valid_acc
-            )
-        )
+        #print(
+        #    "Epoch: {} \tTraining Cost: {:.6f}\t " "Valid Acc: {}".format(
+        #        epoch, train_loss, valid_acc
+        #    )
+        #)
     return train_losses  # Return the losses for plotting
     #####################################################################
     #                       END OF YOUR CODE                            #

@@ -72,8 +72,12 @@ class AutoEncoderWithMetadata(nn.Module):
 
         # decoder layer
         out = latent
-        for layer in self.decoder:
-            out = torch.sigmoid(layer(out))
+        num_dec_layers = len(self.decoder)
+        for i, layer in enumerate(self.decoder):
+            if i != num_dec_layers - 1:
+                out = torch.relu(layer(out))
+            else:
+                out = torch.sigmoid(layer(out))
 
         return out
 
@@ -110,7 +114,7 @@ def train(model, lr, lamb, train_data, zero_train_data, valid_data, question_met
         train_losses.append(train_loss)
         val_accuracies.append(valid_acc)
 
-        print(f"Epoch {epoch} \t Train Loss: {train_loss:.4f} \t Valid Acc: {valid_acc:.4f}")
+        #print(f"Epoch {epoch} \t Train Loss: {train_loss:.4f} \t Valid Acc: {valid_acc:.4f}")
 
     return train_losses, val_accuracies
 
@@ -155,24 +159,27 @@ def main():
 
     metadata_dim = len(subject_vocab)
 
-    k = 10
+    k = 500
     lr = 0.03
-    num_epoch = 80
-    lambs = [0.0001, 0.001, 0.01, 0.1, 1.0]
+    num_epoch = 65
+    lamb = 0
+    enc_layers = 1
+    dec_layers = 1
+    #lambs = [0.0001, 0.001, 0.01, 0.1, 1.0]
 
-    train_accs, val_accs, test_accs, final_losses = [], [], [], []
+    train_accs, val_accs, test_accs = [], [], []
 
-    for lamb in lambs:
-        model = AutoEncoderWithMetadata(num_question=train_matrix.shape[1],
-                                     metadata_dim=metadata_dim,
-                                     k=10)
-        train_losses, val_accuracies = train(
-            model, lr, lamb,
-            train_matrix, zero_train_matrix,
-        valid_data, question_meta_tensor,
-        num_epoch
-    )
-        final_losses.append(train_losses[-1])
+    # final model
+    model = AutoEncoderWithMetadata(num_question=train_matrix.shape[1],
+                                 metadata_dim=metadata_dim,
+                                 k=k, enc_layers=enc_layers,
+                                 dec_layers=dec_layers)
+    for epoch in range(num_epoch):
+        train_losses, val_accuracies = train(model, lr, lamb,
+                                            train_matrix, zero_train_matrix,valid_data,
+                                            question_meta_tensor, 1
+        )
+    #final_losses.append(train_losses[-1])
         train_acc = evaluate(model, zero_train_matrix, load_train_csv("./data"), question_meta_tensor)
         val_acc = evaluate(model, zero_train_matrix, valid_data, question_meta_tensor)
         test_acc = evaluate(model, zero_train_matrix, test_data, question_meta_tensor)
@@ -181,26 +188,60 @@ def main():
         val_accs.append(val_acc)
         test_accs.append(test_acc)
 
-        print("Final Test Accuracy:", test_acc)
+        print(f"Final Model Epoch {epoch} \t Train Acc: {train_acc:.4f} \t Valid Acc: {val_acc:.4f} \t Test Acc: {test_acc:.4f}")
+
+    print("Final Test Accuracy:", test_acc)
+
+    from neural_network import AutoEncoder, train as base_train, evaluate as base_evaluate
+
+    base_train_accs, base_val_accs, base_test_accs = [], [], []
+
+    # hyperparameters giving best base model performance
+    base_k = 10
+    base_lr = 0.02
+    base_num_epoch = 55
+
+    # base model
+    base_model = AutoEncoder(num_question=train_matrix.shape[1], k=base_k)
+    for epoch in range(base_num_epoch):
+        base_train(base_model, base_lr, 0, train_matrix, zero_train_matrix, valid_data, num_epoch=1)
+        base_train_acc = base_evaluate(base_model, zero_train_matrix, load_train_csv("./data"))
+        base_val_acc = base_evaluate(base_model, zero_train_matrix, valid_data)
+        base_test_acc = base_evaluate(base_model, zero_train_matrix, test_data)
+
+        base_train_accs.append(base_train_acc)
+        base_val_accs.append(base_val_acc)
+        base_test_accs.append(base_test_acc)
+
+        print(f"Base Model Epoch {epoch} \t Train Acc: {base_train_acc:.4f} \t Valid Acc: {base_val_acc:.4f} \t Test Acc: {base_test_acc:.4f}")
+    
 
     # Plot training loss and validation accuracy
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-    ax1.plot(range(num_epoch), train_losses, label='Training Loss')
+
+    # final model plots
+    ax1.plot(range(num_epoch), train_accs, label='Training Accuracy', color='blue')
+    ax1.plot(range(num_epoch), val_accs, label='Validation Accuracy', color='green')
+    ax1.axhline(y=test_acc, linestyle='--', color='red', label='Final Model Test Accuracy')
+    ax1.axhline(y=base_test_acc, linestyle='--', color='orange', label='Base Model Test Accuracy')
     ax1.set_xlabel('Epoch')
-    ax1.set_ylabel('Loss')
-    ax1.set_title('Training Loss over Epochs')
+    ax1.set_ylabel('Accuracy')
+    ax1.set_title('Final Model Accuracies over Epochs')
     ax1.legend()
 
-    ax2.plot(range(num_epoch), val_accuracies, label='Validation Accuracy', color='green')
-    ax2.axhline(y=test_acc, linestyle='--', color='red', label='Final Test Accuracy')
+    # base model plots
+    ax2.plot(range(base_num_epoch), base_train_accs, label='Training Accuracy', color='blue')
+    ax2.plot(range(base_num_epoch), base_val_accs, label='Validation Accuracy', color='green')
+    ax2.axhline(y=base_test_acc, linestyle='--', color='red', label='Base Model Test Accuracy')
+    ax2.axhline(y=test_acc, linestyle='--', color='orange', label='Final Model Test Accuracy')
     ax2.set_xlabel('Epoch')
     ax2.set_ylabel('Accuracy')
-    ax2.set_title('Validation Accuracy over Epochs')
+    ax2.set_title('Base Model Accuracies over Epochs')
     ax2.legend()
 
     plt.tight_layout()
-    plt.savefig("nn_with_metadata_training_plot.png")
-    plt.show()
+    plt.savefig("partb_q3_comp_plot.png")
+    #plt.show()
 
 
 if __name__ == "__main__":
